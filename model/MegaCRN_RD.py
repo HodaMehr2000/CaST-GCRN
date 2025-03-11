@@ -33,8 +33,7 @@ This method can significantly enhance the accuracy and robustness of predictions
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from model.AGCRNCell import AGCRNCell
-
+from model.SGCRNCell import AGCRNCell
 
 
 class AVWDCRNN(nn.Module):
