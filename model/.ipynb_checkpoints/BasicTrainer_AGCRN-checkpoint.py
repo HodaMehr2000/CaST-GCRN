@@ -8,7 +8,7 @@ import csv
 from lib.logger import get_logger
 from lib.metrics import All_Metrics
 
-class Trainer:
+class Trainer(object):
     def __init__(self, model, loss, optimizer, train_loader, val_loader, test_loader,
                  scaler, args, lr_scheduler=None):
         super(Trainer, self).__init__()
@@ -21,24 +21,18 @@ class Trainer:
         self.scaler = scaler
         self.args = args
         self.lr_scheduler = lr_scheduler
-        
-        self.train_per_epoch = len(train_loader) if train_loader else 0  # ✅ Ensures it’s never undefined
+        self.train_per_epoch = len(train_loader)
+        if val_loader is not None:
+            self.val_per_epoch = len(val_loader)
+        self.best_path = os.path.join(self.args.log_dir, 'best_model.pth')
+        self.loss_figure_path = os.path.join(self.args.log_dir, 'loss.png')
 
-
-
+        # Always create the log directory if it does not exist
         if not os.path.exists(self.args.log_dir):
             os.makedirs(self.args.log_dir, exist_ok=True)  
-
         self.logger = get_logger(args.log_dir, name=args.model, debug=args.debug)
         self.logger.info(f"Experiment log path in: {args.log_dir}")
-
         self.metrics_path = os.path.join(self.args.log_dir, "training_metrics.csv")
-        # # Logging setup
-        # if not os.path.isdir(args.log_dir) and not args.debug:
-        #     os.makedirs(args.log_dir, exist_ok=True)
-        # self.logger = get_logger(args.log_dir, name=args.model, debug=args.debug)
-        # self.logger.info(f"Experiment log path in: {args.log_dir}")
-
 
 
     def val_epoch(self, epoch, val_dataloader):
@@ -47,29 +41,25 @@ class Trainer:
         total_val_loss = 0
         y_pred = []
         y_true = []
-    
+
         with torch.no_grad():
             for batch_idx, (data, target) in enumerate(val_dataloader):
                 data = data[..., :self.args.input_dim]
                 label = target[..., :self.args.output_dim]
-    
-                #  residual decomposition output
-                output = self.model(data)
-                #output = output1 + output2  # Sum major trend and residual
-    
+                output = self.model(data, target, teacher_forcing_ratio=0.0)
                 y_true.append(label)
                 y_pred.append(output)
-    
+
                 if self.args.real_value:
                     label = self.scaler.inverse_transform(label)
                 loss = self.loss(output, label)
-                if not torch.isnan(loss).any():
+                if not torch.isnan(loss):
                     total_val_loss += loss.item()
-    
+
         val_loss = total_val_loss / len(val_dataloader)
         y_true = self.scaler.inverse_transform(torch.cat(y_true, dim=0))
         y_pred = torch.cat(y_pred, dim=0) if self.args.real_value else self.scaler.inverse_transform(torch.cat(y_pred, dim=0))
-    
+
         mae, rmse, mape, _, _ = All_Metrics(y_pred, y_true, self.args.mae_thresh, self.args.mape_thresh)
         epoch_duration = time.time() - start_time
         self.val_mae = mae
@@ -85,45 +75,39 @@ class Trainer:
         total_loss = 0
         y_pred = []
         y_true = []
-    
+
         for batch_idx, (data, target) in enumerate(self.train_loader):
             data = data[..., :self.args.input_dim]
             label = target[..., :self.args.output_dim]
             self.optimizer.zero_grad()
-    
+
             if self.args.teacher_forcing:
                 global_step = (epoch - 1) * self.train_per_epoch + batch_idx
                 teacher_forcing_ratio = self._compute_sampling_threshold(global_step, self.args.tf_decay_steps)
             else:
                 teacher_forcing_ratio = 1.0
-    
-            #  residual decomposition output
-            output = self.model(data)
-            #output = output1 + output2  # Sum major trend and residual
-    
-            # Debugging residual values
-            #print(f"[DEBUG] output1 mean: {output1.mean().item()}, output2 mean: {output2.mean().item()}")
-    
+
+            output = self.model(data, target, teacher_forcing_ratio=teacher_forcing_ratio)
             y_true.append(label)
             y_pred.append(output)
-    
+
             if self.args.real_value:
                 label = self.scaler.inverse_transform(label)
             loss = self.loss(output, label)
             loss.backward()
-    
+
             if self.args.grad_norm:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
             self.optimizer.step()
             total_loss += loss.item()
-    
+
             if batch_idx % self.args.log_step == 0:
                 self.logger.info(f"Train Epoch {epoch}: {batch_idx}/{self.train_per_epoch} Loss: {loss.item():.6f}")
-    
+
         train_epoch_loss = total_loss / self.train_per_epoch
         y_true = self.scaler.inverse_transform(torch.cat(y_true, dim=0))
         y_pred = torch.cat(y_pred, dim=0) if self.args.real_value else self.scaler.inverse_transform(torch.cat(y_pred, dim=0))
-    
+
         mae, rmse, mape, _, _ = All_Metrics(y_pred, y_true, self.args.mae_thresh, self.args.mape_thresh)
         epoch_duration = time.time() - start_time
         self.train_mae = mae
@@ -131,7 +115,7 @@ class Trainer:
         self.train_mape = mape
         self.train_time = epoch_duration
         self.logger.info(f"Train Epoch {epoch}: averaged Loss: {train_epoch_loss:.6f}, MAE: {mae:.4f}, RMSE: {rmse:.4f}, MAPE: {mape:.4f}, tf_ratio: {teacher_forcing_ratio:.6f}, Time: {epoch_duration:.2f} seconds")
-    
+
         if self.args.lr_decay:
             self.lr_scheduler.step()
         return train_epoch_loss
@@ -152,11 +136,12 @@ class Trainer:
         for epoch in range(1, self.args.epochs + 1):
             epoch_start_time = time.time()
 
-            # Unfreeze embeddings at epoch 20
-            if epoch == 10 and hasattr(self.model, 'set_embedding_trainable'):
+            # Unfreeze embeddings after a certain number of epochs
+            if epoch == 20 and hasattr(self.model, 'set_embedding_trainable'):
                 self.model.set_embedding_trainable(True)
-                self.logger.info("Unfrozen node embeddings after 10 epochs")
+                self.logger.info("Unfrozen node embeddings after 20 epochs")
 
+            # Train and validate
             train_epoch_loss = self.train_epoch(epoch)
             val_dataloader = self.val_loader if self.val_loader is not None else self.test_loader
             val_epoch_loss = self.val_epoch(epoch, val_dataloader)
@@ -164,7 +149,7 @@ class Trainer:
             # Log GPU memory usage
             self.log_gpu_memory(epoch)
 
-            # Prepare and save metrics
+            # Prepare metrics in the desired structure
             metrics = {
                 "epoch": epoch,
                 "train": {
@@ -183,6 +168,7 @@ class Trainer:
                 }
             }
 
+            # Write metrics to CSV
             flattened_metrics = {
                 "epoch": metrics["epoch"],
                 "train_loss": metrics["train"]["loss"],
@@ -204,7 +190,7 @@ class Trainer:
                     headers_written = True
                 writer.writerow(flattened_metrics)
 
-            # Clear memory to avoid GPU issues
+            # Clear memory to avoid GPU memory issues
             del metrics, flattened_metrics
             torch.cuda.empty_cache()
 
@@ -238,7 +224,7 @@ class Trainer:
         # Load the best model for testing
         self.model.load_state_dict(best_model)
         self.test(self.model, self.args, self.test_loader, self.scaler, self.logger)
-        
+
     def save_checkpoint(self):
         state = {
             'state_dict': self.model.state_dict(),
@@ -259,33 +245,21 @@ class Trainer:
         y_pred = []
         y_true = []
         with torch.no_grad():
-            for batch_idx, (data, target) in enumerate(data_loader):
+            for data, target in data_loader:
                 data = data[..., :args.input_dim]
                 label = target[..., :args.output_dim]
-
-
-                output = model(data)
-                if output is None or output.numel() == 0:
-                    #print(f"[ERROR] Model returned an empty tensor at batch {batch_idx}")
-                    continue  # رد کردن این batch
-
+                output = model(data, target, teacher_forcing_ratio=0.0)
                 y_true.append(label)
                 y_pred.append(output)
-
-        if len(y_true) == 0 or len(y_pred) == 0:
-            #print("[ERROR] No valid predictions collected in test()!")
-            return float('inf')
 
         y_true = scaler.inverse_transform(torch.cat(y_true, dim=0))
         y_pred = torch.cat(y_pred, dim=0) if args.real_value else scaler.inverse_transform(torch.cat(y_pred, dim=0))
 
         np.save(f"./{args.dataset}_true.npy", y_true.cpu().numpy())
         np.save(f"./{args.dataset}_pred.npy", y_pred.cpu().numpy())
-
         for t in range(y_true.shape[1]):
             mae, rmse, mape, _, _ = All_Metrics(y_pred[:, t, ...], y_true[:, t, ...], args.mae_thresh, args.mape_thresh)
             logger.info(f"Horizon {t + 1:02d}: MAE: {mae:.2f}, RMSE: {rmse:.2f}, MAPE: {mape:.4f}%")
-
         mae, rmse, mape, _, _ = All_Metrics(y_pred, y_true, args.mae_thresh, args.mape_thresh)
         logger.info(f"Average Horizon: MAE: {mae:.2f}, RMSE: {rmse:.2f}, MAPE: {mape:.4f}%")
 
