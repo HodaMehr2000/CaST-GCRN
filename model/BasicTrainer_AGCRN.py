@@ -27,11 +27,13 @@ class Trainer(object):
         self.best_path = os.path.join(self.args.log_dir, 'best_model.pth')
         self.loss_figure_path = os.path.join(self.args.log_dir, 'loss.png')
 
-        # Log initialization
-        if not os.path.isdir(args.log_dir) and not args.debug:
-            os.makedirs(args.log_dir, exist_ok=True)
+        # Always create the log directory if it does not exist
+        if not os.path.exists(self.args.log_dir):
+            os.makedirs(self.args.log_dir, exist_ok=True)  
         self.logger = get_logger(args.log_dir, name=args.model, debug=args.debug)
         self.logger.info(f"Experiment log path in: {args.log_dir}")
+        self.metrics_path = os.path.join(self.args.log_dir, "training_metrics.csv")
+
 
     def val_epoch(self, epoch, val_dataloader):
         start_time = time.time()
@@ -257,9 +259,9 @@ class Trainer(object):
         np.save(f"./{args.dataset}_pred.npy", y_pred.cpu().numpy())
         for t in range(y_true.shape[1]):
             mae, rmse, mape, _, _ = All_Metrics(y_pred[:, t, ...], y_true[:, t, ...], args.mae_thresh, args.mape_thresh)
-            logger.info(f"Horizon {t + 1:02d}: MAE: {mae:.2f}, RMSE: {rmse:.2f}, MAPE: {mape:.2f}%")
+            logger.info(f"Horizon {t + 1:02d}: MAE: {mae:.2f}, RMSE: {rmse:.2f}, MAPE: {mape:.4f}%")
         mae, rmse, mape, _, _ = All_Metrics(y_pred, y_true, args.mae_thresh, args.mape_thresh)
-        logger.info(f"Average Horizon: MAE: {mae:.2f}, RMSE: {rmse:.2f}, MAPE: {mape:.2f}%")
+        logger.info(f"Average Horizon: MAE: {mae:.2f}, RMSE: {rmse:.2f}, MAPE: {mape:.4f}%")
 
     @staticmethod
     def _compute_sampling_threshold(global_step, k):

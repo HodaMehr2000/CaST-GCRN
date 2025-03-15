@@ -23,10 +23,7 @@ class Trainer:
         self.lr_scheduler = lr_scheduler
         
         self.train_per_epoch = len(train_loader) if train_loader else 0  # ✅ Ensures it’s never undefined
-        # Load DAGMA embeddings (Only future embeddings)
-        # self.E_15min = np.load("C:/Users/Hoda/A - Uni/thesis/est_adj_agcrn/E_init_SVD_horizon3.npy")
-        # self.E_30min = np.load("C:/Users/Hoda/A - Uni/thesis/est_adj_agcrn/E_init_SVD_horizon6.npy")
-        # self.E_60min = np.load("C:/Users/Hoda/A - Uni/thesis/est_adj_agcrn/E_init_SVD_horizon12.npy")
+
 
 
         if not os.path.exists(self.args.log_dir):
@@ -160,17 +157,6 @@ class Trainer:
                 self.model.set_embedding_trainable(True)
                 self.logger.info("Unfrozen node embeddings after 1 epochs")
 
-            # # Update embeddings at specific epochs
-            # if epoch == 3:
-            #     self.model.update_embeddings(self.E_15min)
-            #     self.logger.info("Switched to 15-minute embeddings at epoch 30")
-            # elif epoch == 5:
-            #     self.model.update_embeddings(self.E_30min)
-            #     self.logger.info("Switched to 30-minute embeddings at epoch 50")
-            # elif epoch == 7:
-            #     self.model.update_embeddings(self.E_60min)
-            #     self.logger.info("Switched to 60-minute embeddings at epoch 70")
-            # Train and validate
             train_epoch_loss = self.train_epoch(epoch)
             val_dataloader = self.val_loader if self.val_loader is not None else self.test_loader
             val_epoch_loss = self.val_epoch(epoch, val_dataloader)
