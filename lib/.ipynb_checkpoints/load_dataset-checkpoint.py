@@ -13,7 +13,12 @@ def load_st_dataset(dataset):
 
     elif dataset == 'PEMSD3':
         #data_path = os.path.join('data/PeMSD8/pems08.npz')
-        data = np.load('/content/SGCRN_RD/data/PEMS03/PEMS03.npz')['data'][:, :, 0]  #onley the first dimension, traffic flow data        
+        data = np.load('/content/SGCRN_RD/data/PEMS03/PEMS03.npz')['data'][:, :, 0]  #onley the first dimension, traffic flow data    
+
+    elif dataset == 'PEMSD7':
+        #data_path = os.path.join('data/PeMSD8/pems08.npz')
+        data = np.load('/content/SGCRN_RD/data/PEMS07/PEMS07.npz')['data'][:, :, 0]  #onley the first dimension, traffic flow data 
+
     else:
         raise ValueError
     if len(data.shape) == 2:
