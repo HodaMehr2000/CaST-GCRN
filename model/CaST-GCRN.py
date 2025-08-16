@@ -1,35 +1,3 @@
-'''
-Here's a clear, structured English explanation:
-
- 1. **Encoder for Feature Extraction:
-- The input data is first passed through an encoder module.  
-- This encoder captures both spatial and temporal patterns from the input data.
-- The result is a **latent representation**, a condensed, meaningful encoding of the original data.
-
- 2. Memory Gate:
-- A memory gate acts like a knowledge bank, containing several learned patterns (memory slots).
-- The model uses the output of the encoder to ask the memory, "Have we seen a similar pattern before?"
-- Based on the similarity between the encoder’s output and memory slots, the model selects the most relevant pattern and retrieves it. This retrieved vector is the "memory response."
-
- 3. Combining Memory Response and Encoder Output:
-- The model then **combines** the latent representation from the encoder with the memory response.
-- This combination allows the model to leverage historical patterns, improving the quality of its predictions.
-
- 4. Residual Branch:
-- Since the main encoder might miss some subtle or detailed patterns, a **second branch** (the residual branch) separately processes the small, leftover signals (residual information).
-- This allows the model to handle details or short-term variations better.
-
- 5. Final Integration and Prediction:
-- Finally, outputs from the main branch (enriched by the memory gate) and the residual branch are combined to produce the final prediction.
-- The combined prediction captures both long-term patterns and short-term details more effectively.
-
----
-
-### **In even simpler terms:**
-Imagine your model has a notebook (**memory**) where it writes down important patterns it sees. When the model needs to predict something, it first asks itself: "Have I seen something like this before?" It checks its notebook, retrieves the best matching pattern, and uses that information along with the current data to make a more accurate forecast.
-
-This method can significantly enhance the accuracy and robustness of predictions, especially when patterns repeat or have long-term dependencies.
-'''
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
