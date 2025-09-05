@@ -1,4 +1,4 @@
-# SGCRN
+# CaST-GCR2N
 ## Architecture Overview
 
 This model initializes the graph adjacency matrix using DAGMA (leveraging causal priors instead of random initialization) and employs an adaptive graph structure that evolves during training.
