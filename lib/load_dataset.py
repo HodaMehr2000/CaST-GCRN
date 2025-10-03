@@ -1,19 +1,16 @@
-
-
-
-
-# --- تنظیم ساده برای روشن/خاموش کردن DOW بدون تغییر امضای تابع ---
+# data_loader.py (updated)
 import os
 import numpy as np
 import pandas as pd
 
+# ----------------- Helpers -----------------
 def _ensure_tnc_from_df(df: pd.DataFrame):
     """DataFrame (rows=T, cols=N) -> (T, N, 1) float32"""
     x = df.to_numpy().astype(np.float32)    # (T, N)
     x = np.expand_dims(x, axis=-1)          # (T, N, 1)
     return x
 
-def _read_h5_df(path, key:'/df'):
+def _read_h5_df(path, key='/df'):
     if not os.path.exists(path):
         raise FileNotFoundError(f'H5 not found: {path}')
     with pd.HDFStore(path, mode='r') as store:
@@ -54,6 +51,7 @@ def maybe_add_time_channels(base: np.ndarray,
     base: (T, N, C>=1)
     اگر add_tod / add_dow True باشد، کانال متناظر اضافه می‌شود.
     اگر dt_index داده شده باشد از آن استفاده می‌کنیم، وگرنه از قدم‌های 5 دقیقه‌ای می‌سازیم.
+    (در این نسخه فقط برای METR-LA/PEMS-BAY استفاده می‌کنیم)
     """
     if not (add_tod or add_dow):
         return base
@@ -65,7 +63,7 @@ def maybe_add_time_channels(base: np.ndarray,
         if add_tod: extras.append(_tod_from_datetime_index(dt_index, N))
         if add_dow: extras.append(_dow_from_datetime_index(dt_index, N))
     else:
-        # ساخت synthetic با فرض 5 دقیقه‌ای بودن
+        # ساخت synthetic (اگر لازم شد)، ولی این فایل فعلاً فقط H5ها را هدف می‌گیرد.
         idx = np.arange(T, dtype=np.int64)
         if add_tod:
             tod = ((idx % 288) / 288.0).astype(np.float32)[:, None]
@@ -78,11 +76,14 @@ def maybe_add_time_channels(base: np.ndarray,
 
     return np.concatenate([base] + extras, axis=-1) if extras else base
 
-def load_st_dataset(dataset):
+
+# ----------------- Main Loader -----------------
+def load_st_dataset(dataset, add_tod: bool = False, add_dow: bool = False):
     """
     Returns data with shape (T, N, C).
-    برای METR-LA و PEMS-BAY (H5 با index زمانی)، در صورت فعال بودن ADD_DOW_FOR_H5
-    کانال DOW به کانال سرعت اضافه می‌شود → C=2. برای PEMSهای NPZ، C=1 می‌ماند.
+    - فقط METR-LA و PEMS-BAY را با کانال‌های زمان (براساس فلگ‌ها) آپدیت می‌کنیم.
+    - PEMSD3/4/7/8 دست‌نخورده می‌مانند (فقط سیگنال کانال 0).
+    - کانال 0 همیشه سیگنال اصلی است.
     """
     if dataset == 'PEMSD4':
         data = np.load('/content/CaST-GCRN/data/PEMS04/pems04.npz')['data'][:, :, 0]
@@ -116,11 +117,8 @@ def load_st_dataset(dataset):
         h5_path = '/content/CaST-GCRN/data/METR-LA/metr-la.h5'
         df = _read_h5_df(h5_path, key='/df')                    # rows=T, cols=N=207
         speed = _ensure_tnc_from_df(df)                         # (T, N, 1)
-        if ADD_DOW_FOR_H5:
-            dow = _dow_from_datetime_index(df.index, speed.shape[1])  # (T, N, 1)
-            data = np.concatenate([speed, dow], axis=-1)        # (T, N, 2)
-        else:
-            data = speed                                        # (T, N, 1)
+        # فقط اینجا به‌صورت کنترل‌شده کانال‌های زمان رو اضافه می‌کنیم
+        data  = maybe_add_time_channels(speed, add_tod=add_tod, add_dow=add_dow, dt_index=df.index)
         print('Load %s:' % dataset, data.shape, float(np.max(data)), float(np.min(data)),
               float(np.mean(data)), float(np.median(data)))
         return data
@@ -129,11 +127,7 @@ def load_st_dataset(dataset):
         h5_path = '/content/CaST-GCRN/data/PEMS-BAY/pems-bay.h5'
         df = _read_h5_df(h5_path, key='/df')                    # rows=T, cols=N=325
         speed = _ensure_tnc_from_df(df)                         # (T, N, 1)
-        if ADD_DOW_FOR_H5:
-            dow = _dow_from_datetime_index(df.index, speed.shape[1])  # (T, N, 1)
-            data = np.concatenate([speed, dow], axis=-1)        # (T, N, 2)
-        else:
-            data = speed
+        data  = maybe_add_time_channels(speed, add_tod=add_tod, add_dow=add_dow, dt_index=df.index)
         print('Load %s:' % dataset, data.shape, float(np.max(data)), float(np.min(data)),
               float(np.mean(data)), float(np.median(data)))
         return data
