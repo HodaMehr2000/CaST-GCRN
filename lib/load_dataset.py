@@ -78,7 +78,7 @@ def maybe_add_time_channels(base: np.ndarray,
 
 
 # ----------------- Main Loader -----------------
-def load_st_dataset(dataset, add_tod: bool = False, add_dow: bool = False):
+def load_st_dataset(dataset, add_tod: bool = False, add_dow: bool = True):
     """
     Returns data with shape (T, N, C).
     - فقط METR-LA و PEMS-BAY را با کانال‌های زمان (براساس فلگ‌ها) آپدیت می‌کنیم.
