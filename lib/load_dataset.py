@@ -124,7 +124,7 @@ def load_st_dataset(dataset, add_tod: bool = False, add_dow: bool = True):
         return data
 
     elif dataset == 'PEMS-BAY':
-        h5_path = '/content/CaST-GCRN/data/PEMS-BAY/pems-bay.h5'
+        h5_path = '/content/CaST-GCRN/data/pems-bay.h5'
         df = _read_h5_df(h5_path, key='/df')                    # rows=T, cols=N=325
         speed = _ensure_tnc_from_df(df)                         # (T, N, 1)
         data  = maybe_add_time_channels(speed, add_tod=add_tod, add_dow=add_dow, dt_index=df.index)
