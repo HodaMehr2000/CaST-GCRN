@@ -152,7 +152,7 @@ class Trainer:
         for epoch in range(1, self.args.epochs + 1):
             epoch_start_time = time.time()
 
-            # Unfreeze embeddings at epoch 20
+            # Unfreeze embeddings at epoch 1
             if epoch == 1 and hasattr(self.model, 'set_embedding_trainable'):
                 self.model.set_embedding_trainable(True)
                 self.logger.info("Unfrozen node embeddings after 1 epochs")
